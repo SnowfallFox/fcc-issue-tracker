@@ -4,42 +4,53 @@ const mongoose = require('mongoose')
 mongoose.connect(process.env.MONGO_URI, { dbName:'Issues' });
 
 const issueSchema = new mongoose.Schema({
-  issue_title: { type:String, required:true },
-  issue_text: { type:String, required:true },
+  issue_title: { type:String },
+  issue_text: { type:String },
   created_on: { type:Date, default:new Date },
   updated_on: { type:Date, default: new Date },
-  created_by: { type:String, required:true },
+  created_by: { type:String },
   assigned_to: { type:String, default:"" },
   open: { type:Boolean, default:true },
   status_text: { type:String, default:"" }
-}, { collection: 'apitest' });
+});
 
 module.exports = function (app) {
 
   app.route('/api/issues/:project')
   
-    .get(function (req, res){
+    .get(async function (req, res){
       let project = req.params.project;
+      console.log(`performing GET with: ${project}`)
+      let issue = mongoose.model(project, issueSchema);
+
+      const tickets = await issue.find({}, {__v:0})
+      res.json(tickets)
 
     })
     
-    .post(function (req, res){
+    .post( async function (req, res){
       let project = req.params.project;
       let title = req.body.issue_title;
       let text = req.body.issue_text;
       let by = req.body.created_by;
-      let to = req.body.assigned_to; // optional
-      let status = req.body.status_text; // optional
-      let issue = mongoose.model('apitest', issueSchema);
-
-      const newIssue = new issue({ issue_title:title, issue_text:text, created_by:by });
-      newIssue.save();
+      let to = req.body.assigned_to || ''; // optional
+      let status = req.body.status_text || ''; // optional
+      let issue = mongoose.model(project, issueSchema);
       
-      // post should save valid tickets to the DB
-      // otherwise return { error: 'required field(s) missing' }
+      console.log('POSTing')
 
-      // console.log(new Date)
-      // return { title:title, text:text, by:by, to:to, status:status, created_on:date, updated_on:date }    
+      // if (title === '' || text === '' || by === '') {
+        // should res.json({ error: 'required field(s) missing' }) 
+        // but seems like you already can't even POST a request without the required fields? 
+      // } else {
+        // create ticket and save to DB
+        const newIssue = new issue({ issue_title:title, issue_text:text, created_by:by, assigned_to:to, status_text:status });
+        await newIssue.save();
+
+        // grab ticket from DB and res.json
+        const ticket = await issue.find({issue_title:title, issue_text:text, created_by:by, assigned_to:to, status_text:status}, {__v: 0});
+        res.json(ticket[0])
+      // }  
     })
     
     .put(function (req, res){
