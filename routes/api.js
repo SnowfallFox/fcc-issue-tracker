@@ -20,11 +20,52 @@ module.exports = function (app) {
   
     .get(async function (req, res){
       let project = req.params.project;
-      console.log(`performing GET with: ${project}`)
+      let id = req.query._id;
+      let title = req.query.issue_title;
+      let text = req.query.issue_text;
+      let c_date = req.query.created_on;
+      let u_date = req.query.updated_on;
+      let by = req.query.created_by;
+      let to = req.query.assigned_to;
+      let open = req.query.open;
       let issue = mongoose.model(project, issueSchema);
 
-      const tickets = await issue.find({}, {__v:0})
-      res.json(tickets)
+      // get all tickets
+      let tickets = await issue.find({}, {__v:0});
+
+      // filter based on entered queries, if any
+      if (id) {
+        tickets = tickets.filter(t => t._id == id)
+      }
+      if (title) {
+        tickets = tickets.filter(t => t.issue_title == title)
+      }
+      if (text) {
+        tickets = tickets.filter(t => t.issue_text == text)
+      }
+      if (c_date) {
+        tickets = tickets.filter(t => t.created_on == c_date)
+      }
+      if (u_date) {
+        tickets = tickets.filter(t => t.updated_on == u_date)
+      }
+      if (by) {
+        tickets = tickets.filter(t => t.created_by == by)
+      }
+      if (to) {
+        tickets = tickets.filter(t => t.assigned_to == to)
+      }
+      if (open) {
+        if (open == 'true') {
+          tickets = tickets.filter(t => t.open == true)
+        } else if (open == 'false') {
+          tickets = tickets.filter(t => t.open == false)
+        } else {
+          res.json({ 'error': 'open must be true or false' })
+        }
+      }
+
+      res.json(tickets);
 
     })
     
@@ -36,13 +77,11 @@ module.exports = function (app) {
       let to = req.body.assigned_to || ''; // optional
       let status = req.body.status_text || ''; // optional
       let issue = mongoose.model(project, issueSchema);
-      
-      console.log('POSTing')
 
-      // if (title === '' || text === '' || by === '') {
-        // should res.json({ error: 'required field(s) missing' }) 
-        // but seems like you already can't even POST a request without the required fields? 
-      // } else {
+      // if any required fields left empty, return error
+      if (!title || !text || !by) {
+        res.json({ error: 'required field(s) missing' }) 
+      } else {
         // create ticket and save to DB
         const newIssue = new issue({ issue_title:title, issue_text:text, created_by:by, assigned_to:to, status_text:status });
         await newIssue.save();
@@ -50,12 +89,65 @@ module.exports = function (app) {
         // grab ticket from DB and res.json
         const ticket = await issue.find({issue_title:title, issue_text:text, created_by:by, assigned_to:to, status_text:status}, {__v: 0});
         res.json(ticket[0])
-      // }  
+      }  
     })
     
-    .put(function (req, res){
+    .put(async function (req, res){
       let project = req.params.project;
-      
+      let id = req.body._id;
+      let title = req.body.issue_title;
+      let text = req.body.issue_text;
+      let by = req.body.created_by;
+      let to = req.body.assigned_to;
+      let status = req.body.status_text;
+      let open = req.body.open;
+      let updates = {};
+      let issue = mongoose.model(project, issueSchema);
+
+      // if no id entered, return error
+      if (!id) {
+        res.json({ 'error': 'missing _id'})
+      // if no optional fields selected or entered, return error
+      } else if (!title && !text && !by && !to && !status && !open) {
+        res.json({ error: 'no update field(s) sent', '_id': id })
+      // if optional fields entered, store in an object containing only filled fields and update time
+      } else {
+          if (title) {
+            updates.issue_title = title;
+          }
+          if (text) {
+            updates.issue_text = text;
+          }
+          if (by) {
+            updates.created_by = by;
+          }
+          if (to) {
+            updates.assigned_to = to;
+          } if (status) {
+            updates.status_text = status;
+          }
+          if (open) {
+            updates.open = false;
+          }
+          updates.updated_on = new Date
+          console.log(updates)
+        // try finding entry with matching ID
+        try {
+          let query = await issue.findById(id)
+          // if entry found, update with updates obj and res with success message
+          if (query) {
+            await issue.updateOne(query, updates)
+            res.json({ result:'successfully updated', '_id':id })
+          // if entry not found, return error
+          } else {
+            res.json({ error: 'could not update', '_id': id })
+          }
+        // if err, return error
+        } catch (err) {
+          console.log(err)
+          res.json({ error: 'could not update', '_id': id })
+        }
+      }
     })
     
     .delete(function (req, res){
