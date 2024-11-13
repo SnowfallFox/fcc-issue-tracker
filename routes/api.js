@@ -130,7 +130,6 @@ module.exports = function (app) {
             updates.open = false;
           }
           updates.updated_on = new Date
-          console.log(updates)
         // try finding entry with matching ID
         try {
           let query = await issue.findById(id)
@@ -149,10 +148,34 @@ module.exports = function (app) {
         }
       }
     })
-    
-    .delete(function (req, res){
+    // You can send a DELETE request to /api/issues/{projectname} with an _id to delete an issue.
+    // On failure, the return value is { error: 'could not delete', '_id': _id }.
+    .delete(async function (req, res){
       let project = req.params.project;
-      
+      let id = req.body._id;
+      let issue = mongoose.model(project, issueSchema);
+
+      // If no _id is sent, return error
+      if (!id) {
+        // console.log('no ID')
+        res.json({ error: 'missing _id' })
+      } else {
+        try {
+          // check DB for entry with entered ID
+          let query = await issue.findById(id)
+          // if found, find again and delete, respond with result
+          if (query) {
+            await issue.findByIdAndDelete(id)
+            res.json({ result: 'successfully deleted', _id: id })
+          // if not found, return error
+          } else {
+            res.json({ error: 'could not delete', _id: id })
+          }
+        // if error in try attempt, return error
+        } catch (err) {
+          console.log(err)
+          res.json({ error: 'could not delete', _id: id })
+        }
+      }
     });
-    
 };
